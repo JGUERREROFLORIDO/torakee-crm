@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TORAKEE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{--bg:#f4f7f6;--ink:#14231f;--mut:#5d6f69;--card:#fff;--pri:#12443b;--acc:#e8a33d;--line:#d9e3e0;--err:#b3261e;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1917;--ink:#e8f0ed;--mut:#9bb0aa;--card:#16251f;--pri:#4fb39e;--acc:#e8a33d;--line:#27403a;--err:#ff8a80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Bricolage Grotesque",system-ui,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px 5vw;border-bottom:1px solid var(--line)}
+.logo{font-weight:800;font-size:1.5rem;letter-spacing:.02em;color:var(--pri)}
+a.lnk,button{font:inherit;cursor:pointer}a.lnk{color:var(--mut);text-decoration:none}
+button{border:0;border-radius:10px;padding:10px 16px;background:var(--pri);color:#fff;font-weight:600}
+@media (prefers-color-scheme:dark){button{color:#0f1917}}
+button.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}button.del{background:transparent;color:var(--err);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:wait}:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+main{padding:32px 5vw;max-width:1200px;margin:auto}
+h1{font-size:clamp(2rem,6vw,3.6rem);line-height:1.05;margin:0 0 8px;font-weight:800}
+.sub{color:var(--mut);margin:0 0 28px;max-width:56ch}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}.chip{padding:6px 14px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--ink)}.chip.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+@media (prefers-color-scheme:dark){.chip.on{color:#0f1917}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+.card img,.ph{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--line);display:grid;place-items:center;color:var(--mut)}
+.card .b{padding:14px 16px;display:flex;flex-direction:column;gap:6px;flex:1}.card h3{margin:0;font-size:1.1rem}.card p{margin:0;color:var(--mut);font-size:.92rem;flex:1}
+.price{font-weight:800;font-size:1.2rem}.wa{background:#1fa855;text-align:center;text-decoration:none;color:#fff;border-radius:10px;padding:10px;font-weight:600}
+.tabs{display:flex;gap:6px;margin-bottom:16px}.tabs button{background:transparent;color:var(--mut);border:1px solid var(--line)}.tabs button.on{background:var(--pri);color:#fff}
+@media (prefers-color-scheme:dark){.tabs button.on{color:#0f1917}}
+.bar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}.bar input{flex:1;min-width:180px}
+input,select,textarea{font:inherit;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);width:100%}
+.tw{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:14px}table{border-collapse:collapse;width:100%;min-width:620px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:.95rem}th{color:var(--mut);font-weight:600}tr:last-child td{border:0}td.act{white-space:nowrap;text-align:right}
+.empty{padding:40px;text-align:center;color:var(--mut)}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);width:min(520px,94vw);padding:22px}dialog::backdrop{background:#0008}
+label{display:block;font-size:.88rem;color:var(--mut);margin:12px 0 4px}.row{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.login{max-width:420px;margin:12vh auto;text-align:center}#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:12px;background:var(--ink);color:var(--bg);display:none;max-width:92vw;z-index:9}#toast.err{background:var(--err);color:#fff}
+.thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:10px}
+</style>
+</head>
+<body>
+<header><span class="logo">TORAKEE</span><nav id="nav"></nav></header>
+<main id="app"></main>
+<div id="toast" role="status"></div>
+<dialog id="dlg"></dialog>
+
+<script>
+/* ===== CONFIGURACIÓN (todo esto es público por diseño; ningún secreto va aquí) ===== */
+const API_URL   = 'https://script.google.com/macros/s/AKfycby_9jZ4T-AeaiP2OFcStLPUi3vroBoYiB6PALsf4R6F2z9NH--8FWpYm9jkFW54_POU/exec';
+const CLIENT_ID = '466929610141-1k4v4oci56pkp29fjbauktu6tuc7mlc3.apps.googleusercontent.com';
+const WHATSAPP  = '573217701126';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clean = s => String(s ?? '').replace(/^'/, '');
+const cop = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(n);
+let token = null, user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[]}, q = '';
+
+function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4200); }
+
+async function api(action, data) {
+  let r;
+  try {
+    r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({action, token, data, key: crypto.randomUUID()})});
+    r = await r.json();
+  } catch { throw new Error('Sin conexión con el servidor. Revisa tu internet'); }
+  if (!r.ok) { if (r.code === 'AUTH') { token = null; route(); } throw Object.assign(new Error(r.error), {code: r.code}); }
+  return r.data;
+}
+
+/* ===== Navegación ===== */
+function route() {
+  const admin = location.hash.startsWith('#/admin');
+  $('#nav').innerHTML = admin ? '<a class="lnk" href="#/">Ver catálogo</a>' + (token ? ' &nbsp; <button class="sec" id="out">Salir</button>' : '') : '<a class="lnk" href="#/admin">Administración</a>';
+  if ($('#out')) $('#out').onclick = () => { token = null; user = null; google.accounts.id.disableAutoSelect(); route(); };
+  admin ? (token ? adminView() : loginView()) : catalogView();
+}
+window.addEventListener('hashchange', route);
+
+/* ===== Catálogo público ===== */
+async function catalogView() {
+  $('#app').innerHTML = '<h1>Catálogo TORAKEE</h1><p class="sub">Elige lo que te interesa y escríbenos por WhatsApp para cotizar.</p><div id="cat" class="empty">Cargando productos…</div>';
+  try {
+    const r = await (await fetch(API_URL + '?action=catalog')).json();
+    if (!r.ok) throw 0;
+    const cats = ['Todos', ...new Set(r.data.map(p => clean(p.categoria)).filter(Boolean))];
+    const draw = c => {
+      const list = r.data.filter(p => c === 'Todos' || clean(p.categoria) === c);
+      $('#cat').className = ''; $('#cat').innerHTML = (cats.length > 2 ? '<div class="chips">' + cats.map(x => `<button class="chip ${x === c ? 'on' : ''}" data-c="${esc(x)}">${esc(x)}</button>`).join('') + '</div>' : '') +
+        (list.length ? '<div class="grid">' + list.map(p => {
+          const msg = encodeURIComponent(`Hola TORAKEE, me interesa "${clean(p.nombre)}" (${p.id}). ¿Me das más información?`);
+          return `<article class="card">${p.foto ? `<img src="${esc(p.foto)}" alt="${esc(clean(p.nombre))}" loading="lazy">` : '<div class="ph">Sin foto</div>'}
+          <div class="b"><h3>${esc(clean(p.nombre))}</h3><p>${esc(clean(p.descripcion))}</p><span class="price">${cop(p.precio)}</span>
+          <a class="wa" target="_blank" rel="noopener" href="https://wa.me/${WHATSAPP}?text=${msg}">Pedir información</a></div></article>`;
+        }).join('') + '</div>' : '<div class="empty">Aún no hay productos publicados.</div>');
+      document.querySelectorAll('.chip').forEach(b => b.onclick = () => draw(b.dataset.c));
+    };
+    draw('Todos');
+  } catch { $('#cat').textContent = 'No pudimos cargar el catálogo. Intenta de nuevo en un momento.'; }
+}
+
+/* ===== Login ===== */
+function loginView() {
+  $('#app').innerHTML = '<div class="login"><h1>Administración</h1><p class="sub" style="margin-inline:auto">Entra con tu cuenta de Google autorizada.</p><div id="g" style="display:inline-block"></div></div>';
+  const init = () => {
+    if (!window.google || !google.accounts) return setTimeout(init, 200);
+    google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: true, callback: async res => {
+      token = res.credential;
+      try { cache = {Clientes:[], Productos:[]}; await load(); route(); }
+      catch (e) { token = null; toast(e.message, true); }
+    }});
+    google.accounts.id.renderButton($('#g'), {theme:'outline', size:'large', text:'signin_with', locale:'es'});
+  };
+  init();
+}
+
+/* ===== Panel admin ===== */
+const FIELDS = {
+  Clientes: [['nombre','Nombre',1],['telefono','WhatsApp (con código de país)'],['correo','Correo','','email'],['ciudad','Ciudad'],['notas','Notas','','area']],
+  Productos: [['sku','SKU',1],['nombre','Nombre',1],['descripcion','Descripción','','area'],['categoria','Categoría'],['precio','Precio de venta (COP)',1,'number'],['costo','Costo (COP)','','number'],['stock','Stock','','number'],['publicado','Mostrar en el catálogo público','','check']]
+};
+const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['nombre','sku','categoria','precio','stock','publicado']};
+
+async function load() { for (const e of ['Clientes','Productos']) cache[e] = await api('list', {entity: e}); }
+
+function adminView() {
+  const rows = cache[tab].filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));
+  $('#app').innerHTML = `<h1>Panel</h1><div class="tabs">${['Clientes','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
+  <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
+  <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'stock' && 0 ? cop(r[c]) : esc(c === 'publicado' ? (r[c] === 'SI' ? 'Sí' : 'No') : clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
+  document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; q = ''; adminView(); });
+  $('#q').oninput = e => { q = e.target.value; const p = e.target.selectionStart; adminView(); $('#q').focus(); $('#q').setSelectionRange(p, p); };
+  $('#new').onclick = () => form(); $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
+  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => form(cache[tab].find(r => r.id === b.dataset.e)));
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => archive(cache[tab].find(r => r.id === b.dataset.d)));
+}
+
+function form(rec) {
+  const d = $('#dlg'); let foto = rec ? rec.foto : '';
+  d.innerHTML = `<form method="dialog" id="f"><h2 style="margin:0">${rec ? 'Editar' : 'Nuevo'} ${tab === 'Clientes' ? 'cliente' : 'producto'}</h2>
+  ${FIELDS[tab].map(([k, l, req, t]) => { const v = rec ? clean(rec[k]) : ''; return t === 'check' ? `<label><input type="checkbox" name="${k}" style="width:auto" ${rec && rec[k] === 'SI' ? 'checked' : ''}> ${l}</label>` :
+    `<label for="${k}">${l}${req ? ' *' : ''}</label>` + (t === 'area' ? `<textarea id="${k}" name="${k}" rows="3">${esc(v)}</textarea>` : `<input id="${k}" name="${k}" ${t === 'number' ? 'type="number" min="0" step="any"' : t === 'email' ? 'type="email"' : ''} value="${esc(v)}" ${req ? 'required' : ''}>`); }).join('')}
+  ${tab === 'Productos' ? `<label for="ph">Foto del producto</label><input id="ph" type="file" accept="image/*"><div id="pv" style="margin-top:8px">${foto ? `<img class="thumb" src="${esc(foto)}" alt="">` : ''}</div>` : ''}
+  <div class="row"><button type="button" class="sec" id="cx">Cancelar</button><button type="submit" id="sv">Guardar</button></div></form>`;
+  d.showModal(); $('#cx').onclick = () => d.close();
+  if ($('#ph')) $('#ph').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return; $('#sv').disabled = true; $('#pv').textContent = 'Subiendo foto…';
+    try { foto = (await api('upload', {dataUrl: await resize(f)})).url; $('#pv').innerHTML = `<img class="thumb" src="${esc(foto)}" alt="">`; toast('Foto subida'); }
+    catch (x) { $('#pv').textContent = ''; toast(x.message, true); } $('#sv').disabled = false;
+  };
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); const fd = new FormData(e.target), values = {};
+    FIELDS[tab].forEach(([k,,,t]) => values[k] = t === 'check' ? (fd.get(k) ? 'SI' : 'NO') : fd.get(k));
+    if (tab === 'Productos') values.foto = foto;
+    $('#sv').disabled = true; $('#sv').textContent = 'Guardando…';
+    try {
+      const r = await api(rec ? 'update' : 'create', {entity: tab, id: rec && rec.id, actualizadoEn: rec && rec.actualizadoEn, values});
+      cache[tab] = rec ? cache[tab].map(x => x.id === r.id ? r : x) : [...cache[tab], r];
+      d.close(); adminView(); toast(rec ? 'Cambios guardados' : 'Registro creado: ' + r.id);
+    } catch (x) { toast(x.message, true); if (x.code === 'CONFLICT') { d.close(); await load(); adminView(); } }
+    $('#sv').disabled = false; $('#sv').textContent = 'Guardar';
+  };
+}
+
+async function archive(r) {
+  if (!confirm('¿Archivar "' + clean(r.nombre) + '"? Dejará de verse, pero se conserva en la hoja.')) return;
+  try { await api('archive', {entity: tab, id: r.id, actualizadoEn: r.actualizadoEn}); cache[tab] = cache[tab].filter(x => x.id !== r.id); adminView(); toast('Registro archivado'); }
+  catch (x) { toast(x.message, true); if (x.code === 'CONFLICT') { await load(); adminView(); } }
+}
+
+function resize(file) { // reduce a ~1200px JPEG antes de enviar
+  return new Promise((ok, no) => { const img = new Image(); img.onload = () => {
+    const s = Math.min(1, 1200 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = img.width * s; c.height = img.height * s; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .85)); };
+    img.onerror = () => no(new Error('No se pudo leer la imagen')); img.src = URL.createObjectURL(file); });
+}
+
+route();
+</script>
+</body>
+</html>
