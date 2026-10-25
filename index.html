@@ -150,7 +150,21 @@ const FIELDS = {
 };
 const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['nombre','sku','categoria','precio','stock','publicado'], Pedidos:['clienteId','productoId','cantidad','valor','estadoPedido','fechaPedido']};
 
-async function load() { for (const e of ['Clientes','Productos','Pedidos']) { try { cache[e] = await api('list', {entity: e}); } catch(err) { if(err.code==='AUTH'||err.code==='FORBIDDEN') throw err; console.error('Error cargando '+e,err); toast('Error cargando '+e+': '+err.message,true); } } }
+async function load() {
+ const results=await Promise.allSettled(['Clientes','Productos','Pedidos'].map(entity=>api('list',{entity})));
+ ['Clientes','Productos','Pedidos'].forEach((entity,i)=>{
+   const result=results[i];
+   if(result.status==='fulfilled'){cache[entity]=result.value;return;}
+   const err=result.reason;
+   if(err.code==='AUTH'||err.code==='FORBIDDEN')throw err;
+   cache[entity]=[];
+   console.error('Error cargando '+entity,err);
+   if(entity==='Pedidos') {
+     window.pedidosNoDisponibles=true;
+     toast('Pedidos no disponible en Apps Script. Debes actualizar la implementación del servidor.',true);
+   } else toast('Error cargando '+entity+': '+err.message,true);
+ });
+}
 
 
 function overview(){
@@ -171,7 +185,7 @@ function adminView() {
   <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'valor' ? cop(r[c]) : esc(c==='clienteId'?(cache.Clientes.find(x=>x.id===r[c])?.nombre||r[c]):c==='productoId'?(cache.Productos.find(x=>x.id===r[c])?.nombre||r[c]):c==='publicado'?(r[c]==='SI'?'Sí':'No'):clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; q = ''; adminView(); });
   $('#q').oninput = e => { q = e.target.value; const p = e.target.selectionStart; adminView(); $('#q').focus(); $('#q').setSelectionRange(p, p); };
-  $('#new').onclick = () => tab==='Pedidos'?orderForm():form(); $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
+  $('#new').onclick = () => {if(tab==='Pedidos'&&window.pedidosNoDisponibles){toast('Actualiza Apps Script para habilitar Pedidos.',true);return;} tab==='Pedidos'?orderForm():form();}; $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
   document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => tab==='Pedidos'?orderForm(cache[tab].find(r => r.id === b.dataset.e)):form(cache[tab].find(r => r.id === b.dataset.e)));
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => archive(cache[tab].find(r => r.id === b.dataset.d)));
 }
