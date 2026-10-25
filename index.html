@@ -273,7 +273,8 @@ async function orderForm(rec){
  d.innerHTML='<form id="of"><h2>'+(rec?'Editar':'Nuevo')+' pedido</h2>'+
  '<label>Cliente</label><select id="oc" required><option value="">Seleccionar cliente</option>'+opts(cache.Clientes,v.clienteId)+'</select><button type="button" class="sec" id="nc">+ Nuevo cliente</button>'+
  '<div id="newc" hidden><label>Nombre del cliente</label><input id="cn"><label>WhatsApp</label><input id="ct"><label>Correo</label><input id="ce" type="email"></div>'+
- '<label>Producto</label><select id="op" required><option value="">Seleccionar producto</option>'+opts(cache.Productos,v.productoId)+'</select>'+
+ '<label>Producto</label><select id="op" required><option value="">Seleccionar producto</option>'+opts(cache.Productos,v.productoId)+'</select><button type="button" class="sec" id="np">+ Producto exclusivo para este pedido</button>'+
+ '<div id="newp" hidden><p class="note">Producto exclusivo del cliente. No aparecerá en el catálogo.</p><label>Nombre del producto</label><input id="pn" placeholder="Ej. Figura personalizada"><label>Descripción</label><textarea id="pd" placeholder="Medidas, colores y detalles"></textarea><label>Enlace de referencia (MakerWorld u otra página)</label><input id="pl" type="url" placeholder="https://..."></div>'+
  '<label>Cantidad</label><input id="oq" type="number" min="1" step="1" value="'+esc(v.cantidad||1)+'" required>'+
  '<label>Valor del pedido (COP)</label><input id="ov" type="number" min="0" step="any" value="'+esc(v.valor||'')+'" required>'+
  '<label>Fecha</label><input id="od" type="date" value="'+esc(v.fechaPedido||new Date().toLocaleDateString('en-CA'))+'" required>'+
