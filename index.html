@@ -83,17 +83,29 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clean = s => String(s ?? '').replace(/^'/, '');
 const cop = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(n);
-let token = sessionStorage.getItem('torakee_token'), user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[], Pedidos:[]}, q = '';
+let token = getSavedToken(), user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[], Pedidos:[]}, q = '';
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4200); }
 
+function getSavedToken() {
+ try {
+  const t=localStorage.getItem('torakee_token');
+  if(!t)return null;
+  const payload=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+  if(!payload.exp || Date.now()>=payload.exp*1000-60000){localStorage.removeItem('torakee_token');return null;}
+  return t;
+ }catch(e){localStorage.removeItem('torakee_token');return null;}
+}
+function clearSession(){token=null;user=null;localStorage.removeItem('torakee_token');sessionStorage.removeItem('torakee_token');}
 async function api(action, data) {
+ if(token && !getSavedToken()){clearSession();route();throw Object.assign(new Error('Tu sesión de Google caducó. Inicia sesión de nuevo.'),{code:'AUTH'});}
+
   let r;
   try {
     r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({action, token, data, key: crypto.randomUUID()})});
     r = await r.json();
   } catch { throw new Error('Sin conexión con el servidor. Revisa tu internet'); }
-  if (!r.ok) { if (r.code === 'AUTH') { token = null; user = null; sessionStorage.removeItem('torakee_token'); toast('Tu sesión venció. Inicia sesión nuevamente.', true); route(); } throw Object.assign(new Error(r.error || 'Error del servidor'), {code: r.code}); }
+  if (!r.ok) { if (r.code === 'AUTH') { clearSession(); toast('Tu sesión venció. Inicia sesión nuevamente.', true); route(); } throw Object.assign(new Error(r.error || 'Error del servidor'), {code: r.code}); }
   return r.data;
 }
 
@@ -101,7 +113,7 @@ async function api(action, data) {
 function route() {
   const admin = location.hash.startsWith('#/admin');
   $('#nav').innerHTML = admin ? '<a class="lnk" href="#/">Ver catálogo</a>' + (token ? ' &nbsp; <button class="sec" id="out">Salir</button>' : '') : '<a class="lnk" href="#/admin">Administración</a>';
-  if ($('#out')) $('#out').onclick = () => { token = null; user = null; sessionStorage.removeItem('torakee_token'); google.accounts.id.disableAutoSelect(); route(); };
+  if ($('#out')) $('#out').onclick = () => { clearSession(); google.accounts.id.disableAutoSelect(); route(); };
   admin ? (token ? adminView() : loginView()) : catalogView();
 }
 window.addEventListener('hashchange', route);
@@ -133,8 +145,8 @@ function loginView() {
   $('#app').innerHTML = '<div class="login"><h1>Administración</h1><p class="sub" style="margin-inline:auto">Entra con tu cuenta de Google autorizada.</p><div id="g" style="display:inline-block"></div></div>';
   const init = () => {
     if (!window.google || !google.accounts) return setTimeout(init, 200);
-    google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: false, callback: async res => {
-      token = res.credential; sessionStorage.setItem('torakee_token', token);
+    google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: true, callback: async res => {
+      token = res.credential; localStorage.setItem('torakee_token', token);
       try { await load(); route(); }
       catch (e) { toast('No se pudieron cargar los datos: ' + e.message, true); route(); }
     }});
@@ -287,6 +299,7 @@ function resize(file) { // reduce a ~1200px JPEG antes de enviar
     img.onerror = () => no(new Error('No se pudo leer la imagen')); img.src = URL.createObjectURL(file); });
 }
 
+if(!token && sessionStorage.getItem('torakee_token')){sessionStorage.removeItem('torakee_token');}
 route();
 </script>
 </body>
