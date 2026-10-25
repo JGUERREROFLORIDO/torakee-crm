@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TORAKEE</title>
+<title>TORAKEE · Gestión del estudio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -39,6 +39,32 @@ dialog{border:1px solid var(--line);border-radius:16px;background:var(--card);co
 label{display:block;font-size:.88rem;color:var(--mut);margin:12px 0 4px}.row{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
 .login{max-width:420px;margin:12vh auto;text-align:center}#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:12px;background:var(--ink);color:var(--bg);display:none;max-width:92vw;z-index:9}#toast.err{background:var(--err);color:#fff}
 .thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:10px}
+
+/* TORAKEE · estudio creativo premium */
+:root{--bg:#0b0b12;--ink:#f4f1ff;--mut:#aaa4bb;--card:#181624;--pri:#b49aff;--acc:#d6b7ff;--line:#302b40;--err:#ff849a;color-scheme:dark}
+@media(prefers-color-scheme:dark){:root{--bg:#0b0b12;--ink:#f4f1ff;--mut:#aaa4bb;--card:#181624;--pri:#b49aff;--acc:#d6b7ff;--line:#302b40;--err:#ff849a}}
+body{background:radial-gradient(ellipse 65% 32% at 80% 0%,#38265b55,transparent),var(--bg)}
+header{background:#100f19dd;backdrop-filter:blur(16px);position:sticky;top:0;z-index:4}
+.logo{color:#c4a7e7;letter-spacing:.12em}
+button{background:#9b78eb;color:#130f20;transition:transform .2s,background .2s,box-shadow .2s}
+button:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px #a77df433}
+@media(prefers-color-scheme:dark){button{color:#130f20}.chip.on,.tabs button.on{color:#130f20}}
+h1{letter-spacing:-.055em}
+.card,.tw,.stat{box-shadow:0 12px 40px #0002;transition:transform .2s,border-color .2s}
+.card:hover,.stat:hover{transform:translateY(-3px);border-color:#8c65b8}
+.grid{gap:18px}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:24px 0}
+.stat{background:linear-gradient(145deg,#221b33,#171521);border:1px solid #39304e;border-radius:18px;padding:22px}
+.stat small{display:block;color:var(--mut);font-size:.85rem}
+.stat strong{display:block;font-size:clamp(1.5rem,3vw,2rem);margin-top:8px;letter-spacing:-.04em}
+.eyebrow{color:#c4a7e7;text-transform:uppercase;font-size:.75rem;letter-spacing:.18em;font-weight:800}
+.panel-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.welcome{padding:28px;border:1px solid #3a2e54;border-radius:20px;background:linear-gradient(110deg,#302046,#171522);margin-bottom:18px}
+.welcome p{color:#c9c0d8;margin-bottom:0}
+.note{color:var(--mut);font-size:.9rem}
+.card img{transition:transform .4s}.card:hover img{transform:scale(1.025)}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
 </style>
 </head>
 <body>
@@ -126,9 +152,21 @@ const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['no
 
 async function load() { for (const e of ['Clientes','Productos']) cache[e] = await api('list', {entity: e}); }
 
+
+function overview(){
+  const clients=cache.Clientes||[], products=cache.Productos||[];
+  return `<div class="welcome"><div class="eyebrow">Panel de control · TORAKEE</div><h1 style="font-size:clamp(2rem,5vw,3rem);margin-top:8px">Tu estudio, en orden.</h1><p>Gestiona clientes y productos desde un solo lugar. Los pedidos, ventas y ganancias se habilitarán cuando conectemos esos registros al servidor.</p></div>
+  <div class="statgrid">
+  <div class="stat"><small>Clientes registrados</small><strong>${clients.length}</strong></div>
+  <div class="stat"><small>Productos registrados</small><strong>${products.length}</strong></div>
+  <div class="stat"><small>Productos publicados</small><strong>${products.filter(x=>x.publicado==='SI').length}</strong></div>
+  <div class="stat"><small>Valor del inventario (precio de venta)</small><strong>${cop(products.reduce((sum,p)=>sum+(Number(p.precio)||0)*(Number(p.stock)||0),0))}</strong></div>
+  </div><p class="note">El valor del inventario es una estimación a precio de venta, no representa ingresos ni ganancias.</p>`;
+}
+
 function adminView() {
   const rows = cache[tab].filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));
-  $('#app').innerHTML = `<h1>Panel</h1><div class="tabs">${['Clientes','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
+  $('#app').innerHTML = `${overview()}<div class="tabs">${['Clientes','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
   <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
   <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'stock' && 0 ? cop(r[c]) : esc(c === 'publicado' ? (r[c] === 'SI' ? 'Sí' : 'No') : clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; q = ''; adminView(); });
