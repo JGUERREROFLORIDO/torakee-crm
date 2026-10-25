@@ -198,7 +198,7 @@ function overview(){
 }
 
 function adminView() {
-  const rows = cache[tab].filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));
+  const rows = cache[tab].filter(r => (tab!=='Productos'||r.categoria!=='Pedido privado') && (!q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase())));
   $('#app').innerHTML = `${overview()}<div class="tabs">${['Clientes','Pedidos','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
   <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : tab === 'Pedidos' ? 'pedido' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
   <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'valor' ? cop(r[c]) : esc(c==='clienteId'?(cache.Clientes.find(x=>x.id===r[c])?.nombre||r[c]):c==='productoId'?(cache.Productos.find(x=>x.id===r[c])?.nombre||r[c]):c==='publicado'?(r[c]==='SI'?'Sí':'No'):clean(r[c]))}</td>`).join('')}<td class="act">${tab==='Clientes'?`<button class="sec" data-history="${esc(r.id)}">Historial</button> `:''}<button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
@@ -269,7 +269,7 @@ async function archive(r) {
 
 async function orderForm(rec){
  const d=$('#dlg',),v=rec||{},files=(()=>{try{return JSON.parse(v.archivos||'[]')}catch{return []}})();
- const opts=(rows,val)=>rows.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===val?'selected':'')+'>'+esc(x.nombre)+'</option>').join('');
+ const opts=(rows,val)=>rows.filter(x=>x.categoria!=='Pedido privado'||x.id===val).map(x=>'<option value="'+esc(x.id)+'" '+(x.id===val?'selected':'')+'>'+esc(x.nombre)+'</option>').join('');
  d.innerHTML='<form id="of"><h2>'+(rec?'Editar':'Nuevo')+' pedido</h2>'+
  '<label>Cliente</label><select id="oc" required><option value="">Seleccionar cliente</option>'+opts(cache.Clientes,v.clienteId)+'</select><button type="button" class="sec" id="nc">+ Nuevo cliente</button>'+
  '<div id="newc" hidden><label>Nombre del cliente</label><input id="cn"><label>WhatsApp</label><input id="ct"><label>Correo</label><input id="ce" type="email"></div>'+
@@ -284,6 +284,7 @@ async function orderForm(rec){
  '<div class="row"><button type="button" class="sec" id="cancelOrder">Cancelar</button><button type="submit" id="saveOrder">Guardar</button></div></form>';
  d.showModal();$('#cancelOrder').onclick=()=>d.close();
  $('#nc').onclick=()=>{$('#newc').hidden=!$('#newc').hidden;$('#oc').required=$('#newc').hidden;};
+ $('#np').onclick=()=>{$('#newp').hidden=!$('#newp').hidden;$('#op').required=$('#newp').hidden;};
  let custom=!!rec;
  const calc=()=>{if(custom)return;const p=cache.Productos.find(x=>x.id===$('#op').value);if(p)$('#ov').value=Number(p.precio||0)*Number($('#oq').value||1);};
  $('#op').onchange=calc;$('#oq').oninput=calc;$('#ov').oninput=()=>custom=true;
@@ -291,9 +292,19 @@ async function orderForm(rec){
  try{
  let clienteId=$('#oc').value;
  if(!$('#newc').hidden){const nombre=$('#cn').value.trim();if(!nombre)throw Error('Ingresa el nombre del cliente');const c=await api('create',{entity:'Clientes',values:{nombre,telefono:$('#ct').value,correo:$('#ce').value}});cache.Clientes.push(c);clienteId=c.id;}
- if(!clienteId||!$('#op').value)throw Error('Selecciona cliente y producto');
+ if(!clienteId||($('#newp').hidden&&!$('#op').value))throw Error('Selecciona cliente y producto');
+ let productoId=$('#op').value;
+ if(!$('#newp').hidden){
+  const nombre=$('#pn').value.trim(),descripcion=$('#pd').value.trim();
+  if(!nombre)throw Error('Ingresa el nombre del producto personalizado');
+  const sku='PRIV-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+  const producto=await api('create',{entity:'Productos',values:{sku,nombre,descripcion,categoria:'Pedido privado',precio:Number($('#ov').value||0)/Number($('#oq').value||1),costo:0,stock:0,publicado:'NO'}});
+  cache.Productos.push(producto);productoId=producto.id;
+ }
  for(const f of $('#ofiles').files){if(f.size>7*1024*1024)throw Error('Archivo mayor a 7 MB: '+f.name);const dataUrl=await new Promise((resolve,reject)=>{const rd=new FileReader();rd.onload=()=>resolve(rd.result);rd.onerror=reject;rd.readAsDataURL(f)});files.push(await api('uploadOrderFile',{name:f.name,dataUrl}));}
- const values={clienteId,productoId:$('#op').value,cantidad:$('#oq').value,valor:$('#ov').value,fechaPedido:$('#od').value,estadoPedido:$('#os').value,notas:$('#on').value,enlaces:$('#ol').value,archivos:JSON.stringify(files)};
+ const refLink=!$('#newp').hidden?$('#pl').value.trim():'';
+ const allLinks=[$('#ol').value.trim(),refLink].filter(Boolean).join('\n');
+ const values={clienteId,productoId,cantidad:$('#oq').value,valor:$('#ov').value,fechaPedido:$('#od').value,estadoPedido:$('#os').value,notas:$('#on').value,enlaces:allLinks,archivos:JSON.stringify(files)};
  const saved=await api(rec?'update':'create',{entity:'Pedidos',id:rec?.id,actualizadoEn:rec?.actualizadoEn,values});
  cache.Pedidos=rec?cache.Pedidos.map(x=>x.id===saved.id?saved:x):[...cache.Pedidos,saved];d.close();adminView();toast('Pedido guardado');
  }catch(err){toast(err.message,true)}finally{btn.disabled=false}};
