@@ -83,7 +83,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clean = s => String(s ?? '').replace(/^'/, '');
 const cop = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(n);
-let token = null, user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[], Pedidos:[]}, q = '';
+let token = sessionStorage.getItem('torakee_token'), user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[], Pedidos:[]}, q = '';
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4200); }
 
@@ -93,7 +93,7 @@ async function api(action, data) {
     r = await fetch(API_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({action, token, data, key: crypto.randomUUID()})});
     r = await r.json();
   } catch { throw new Error('Sin conexión con el servidor. Revisa tu internet'); }
-  if (!r.ok) { if (r.code === 'AUTH') { token = null; route(); } throw Object.assign(new Error(r.error), {code: r.code}); }
+  if (!r.ok) { if (r.code === 'AUTH') { token = null; user = null; sessionStorage.removeItem('torakee_token'); toast('Tu sesión venció. Inicia sesión nuevamente.', true); route(); } throw Object.assign(new Error(r.error || 'Error del servidor'), {code: r.code}); }
   return r.data;
 }
 
@@ -101,7 +101,7 @@ async function api(action, data) {
 function route() {
   const admin = location.hash.startsWith('#/admin');
   $('#nav').innerHTML = admin ? '<a class="lnk" href="#/">Ver catálogo</a>' + (token ? ' &nbsp; <button class="sec" id="out">Salir</button>' : '') : '<a class="lnk" href="#/admin">Administración</a>';
-  if ($('#out')) $('#out').onclick = () => { token = null; user = null; google.accounts.id.disableAutoSelect(); route(); };
+  if ($('#out')) $('#out').onclick = () => { token = null; user = null; sessionStorage.removeItem('torakee_token'); google.accounts.id.disableAutoSelect(); route(); };
   admin ? (token ? adminView() : loginView()) : catalogView();
 }
 window.addEventListener('hashchange', route);
@@ -133,10 +133,10 @@ function loginView() {
   $('#app').innerHTML = '<div class="login"><h1>Administración</h1><p class="sub" style="margin-inline:auto">Entra con tu cuenta de Google autorizada.</p><div id="g" style="display:inline-block"></div></div>';
   const init = () => {
     if (!window.google || !google.accounts) return setTimeout(init, 200);
-    google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: true, callback: async res => {
-      token = res.credential;
-      try { cache = {Clientes:[], Productos:[], Pedidos:[]}; await load(); route(); }
-      catch (e) { token = null; toast(e.message, true); }
+    google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: false, callback: async res => {
+      token = res.credential; sessionStorage.setItem('torakee_token', token);
+      try { await load(); route(); }
+      catch (e) { toast('No se pudieron cargar los datos: ' + e.message, true); route(); }
     }});
     google.accounts.id.renderButton($('#g'), {theme:'outline', size:'large', text:'signin_with', locale:'es'});
   };
@@ -150,7 +150,7 @@ const FIELDS = {
 };
 const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['nombre','sku','categoria','precio','stock','publicado'], Pedidos:['clienteId','productoId','cantidad','valor','estadoPedido','fechaPedido']};
 
-async function load() { for (const e of ['Clientes','Productos','Pedidos']) cache[e] = await api('list', {entity: e}); }
+async function load() { for (const e of ['Clientes','Productos','Pedidos']) { try { cache[e] = await api('list', {entity: e}); } catch(err) { if(err.code==='AUTH'||err.code==='FORBIDDEN') throw err; console.error('Error cargando '+e,err); toast('Error cargando '+e+': '+err.message,true); } } }
 
 
 function overview(){
