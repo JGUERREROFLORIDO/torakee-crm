@@ -182,12 +182,36 @@ function adminView() {
   const rows = cache[tab].filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));
   $('#app').innerHTML = `${overview()}<div class="tabs">${['Clientes','Pedidos','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
   <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : tab === 'Pedidos' ? 'pedido' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
-  <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'valor' ? cop(r[c]) : esc(c==='clienteId'?(cache.Clientes.find(x=>x.id===r[c])?.nombre||r[c]):c==='productoId'?(cache.Productos.find(x=>x.id===r[c])?.nombre||r[c]):c==='publicado'?(r[c]==='SI'?'Sí':'No'):clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
+  <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'valor' ? cop(r[c]) : esc(c==='clienteId'?(cache.Clientes.find(x=>x.id===r[c])?.nombre||r[c]):c==='productoId'?(cache.Productos.find(x=>x.id===r[c])?.nombre||r[c]):c==='publicado'?(r[c]==='SI'?'Sí':'No'):clean(r[c]))}</td>`).join('')}<td class="act">${tab==='Clientes'?`<button class="sec" data-history="${esc(r.id)}">Historial</button> `:''}<button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; q = ''; adminView(); });
   $('#q').oninput = e => { q = e.target.value; const p = e.target.selectionStart; adminView(); $('#q').focus(); $('#q').setSelectionRange(p, p); };
   $('#new').onclick = () => {if(tab==='Pedidos'&&window.pedidosNoDisponibles){toast('Actualiza Apps Script para habilitar Pedidos.',true);return;} tab==='Pedidos'?orderForm():form();}; $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
+  document.querySelectorAll('[data-history]').forEach(b => b.onclick = () => clientHistory(b.dataset.history));
   document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => tab==='Pedidos'?orderForm(cache[tab].find(r => r.id === b.dataset.e)):form(cache[tab].find(r => r.id === b.dataset.e)));
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => archive(cache[tab].find(r => r.id === b.dataset.d)));
+}
+
+
+function clientHistory(id){
+ const client=cache.Clientes.find(c=>c.id===id);
+ if(!client){toast('Cliente no encontrado',true);return;}
+ const orders=(cache.Pedidos||[]).filter(o=>o.clienteId===id).sort((a,b)=>String(b.fechaPedido||b.creadoEn||'').localeCompare(String(a.fechaPedido||a.creadoEn||'')));
+ const d=$('#dlg');
+ const links=text=>String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>/^https?:\/\//i.test(x)).map(x=>'<a class="lnk" href="'+esc(x)+'" target="_blank" rel="noopener noreferrer">'+esc(x)+'</a>').join('<br>');
+ const attachments=o=>{let a=[];try{a=JSON.parse(o.archivos||'[]');if(!Array.isArray(a))a=[]}catch{}return a.filter(f=>f&&/^https?:\/\//i.test(f.url||'')).map(f=>'<a class="lnk" href="'+esc(f.url)+'" target="_blank" rel="noopener noreferrer">📎 '+esc(f.name||'Archivo')+'</a>').join('<br>')};
+ d.innerHTML='<div class="panel-head"><div><div class="eyebrow">Ficha del cliente</div><h2 style="margin:4px 0">'+esc(clean(client.nombre))+'</h2></div><button class="sec" id="closeHistory">Cerrar</button></div>'+
+ '<p class="note">'+[client.telefono,client.correo,client.ciudad].filter(Boolean).map(esc).join(' · ')+'</p>'+
+ '<div class="statgrid"><div class="stat"><small>Pedidos registrados</small><strong>'+orders.length+'</strong></div><div class="stat"><small>Valor total de pedidos</small><strong>'+cop(orders.filter(o=>o.estadoPedido!=='Cancelado').reduce((a,o)=>a+Number(o.valor||0),0))+'</strong></div></div>'+
+ (orders.length?orders.map(o=>{const product=cache.Productos.find(p=>p.id===o.productoId);return '<article class="card" style="padding:18px;margin:14px 0;gap:7px"><div class="panel-head"><strong>'+esc(o.id)+'</strong><span>'+esc(o.estadoPedido||'Pendiente')+'</span></div>'+
+ '<div class="note">Fecha: '+esc(o.fechaPedido||'Sin fecha')+'</div><div>Producto: <strong>'+esc(product?.nombre||o.productoId||'Sin producto')+'</strong></div><div>Cantidad: '+esc(o.cantidad||'1')+'</div><div>Valor: <strong>'+cop(o.valor||0)+'</strong></div>'+
+ (o.notas?'<div>Notas: '+esc(clean(o.notas))+'</div>':'')+
+ (o.enlaces?'<div>Enlaces:<br>'+links(o.enlaces)+'</div>':'')+
+ (o.archivos?'<div>Archivos:<br>'+(attachments(o)||'<span class="note">Sin archivos válidos</span>')+'</div>':'')+
+ '<div><button class="sec" data-open-order="'+esc(o.id)+'">Ver / editar pedido</button></div></article>'}).join(''):'<div class="empty">Este cliente todavía no tiene pedidos registrados.</div>');
+ d.style.width='min(760px,96vw)';d.style.maxHeight='85vh';d.style.overflowY='auto';d.showModal();
+ $('#closeHistory').onclick=()=>{d.close();d.style.width='';};
+ d.querySelectorAll('[data-open-order]').forEach(b=>b.onclick=()=>{const order=cache.Pedidos.find(o=>o.id===b.dataset.openOrder);d.close();d.style.width='';if(order)orderForm(order)});
+ d.addEventListener('close',()=>{d.style.width=''}, {once:true});
 }
 
 function form(rec) {
