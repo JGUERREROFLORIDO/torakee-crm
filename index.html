@@ -83,7 +83,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clean = s => String(s ?? '').replace(/^'/, '');
 const cop = n => new Intl.NumberFormat('es-CO', {style:'currency', currency:'COP', maximumFractionDigits:0}).format(n);
-let token = null, user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[]}, q = '';
+let token = null, user = null, tab = 'Clientes', cache = {Clientes:[], Productos:[], Pedidos:[]}, q = '';
 
 function toast(m, err) { const t = $('#toast'); t.textContent = m; t.className = err ? 'err' : ''; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 4200); }
 
@@ -135,7 +135,7 @@ function loginView() {
     if (!window.google || !google.accounts) return setTimeout(init, 200);
     google.accounts.id.initialize({client_id: CLIENT_ID, auto_select: true, callback: async res => {
       token = res.credential;
-      try { cache = {Clientes:[], Productos:[]}; await load(); route(); }
+      try { cache = {Clientes:[], Productos:[], Pedidos:[]}; await load(); route(); }
       catch (e) { token = null; toast(e.message, true); }
     }});
     google.accounts.id.renderButton($('#g'), {theme:'outline', size:'large', text:'signin_with', locale:'es'});
@@ -148,31 +148,31 @@ const FIELDS = {
   Clientes: [['nombre','Nombre',1],['telefono','WhatsApp (con código de país)'],['correo','Correo','','email'],['ciudad','Ciudad'],['notas','Notas','','area']],
   Productos: [['sku','SKU',1],['nombre','Nombre',1],['descripcion','Descripción','','area'],['categoria','Categoría'],['precio','Precio de venta (COP)',1,'number'],['costo','Costo (COP)','','number'],['stock','Stock','','number'],['publicado','Mostrar en el catálogo público','','check']]
 };
-const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['nombre','sku','categoria','precio','stock','publicado']};
+const COLS = {Clientes: ['nombre','telefono','correo','ciudad'], Productos: ['nombre','sku','categoria','precio','stock','publicado'], Pedidos:['clienteId','productoId','cantidad','valor','estadoPedido','fechaPedido']};
 
-async function load() { for (const e of ['Clientes','Productos']) cache[e] = await api('list', {entity: e}); }
+async function load() { for (const e of ['Clientes','Productos','Pedidos']) cache[e] = await api('list', {entity: e}); }
 
 
 function overview(){
-  const clients=cache.Clientes||[], products=cache.Productos||[];
+  const clients=cache.Clientes||[], products=cache.Productos||[], orders=cache.Pedidos||[]; const month=new Date().toISOString().slice(0,7);
   return `<div class="welcome"><div class="eyebrow">Panel de control · TORAKEE</div><h1 style="font-size:clamp(2rem,5vw,3rem);margin-top:8px">Tu estudio, en orden.</h1><p>Gestiona clientes y productos desde un solo lugar. Los pedidos, ventas y ganancias se habilitarán cuando conectemos esos registros al servidor.</p></div>
   <div class="statgrid">
+  <div class="stat"><small>Pedidos pendientes</small><strong>${orders.filter(o=>!['Entregado','Cancelado'].includes(o.estadoPedido)).length}</strong></div>
+  <div class="stat"><small>Pedidos entregados</small><strong>${orders.filter(o=>o.estadoPedido==='Entregado').length}</strong></div>
   <div class="stat"><small>Clientes registrados</small><strong>${clients.length}</strong></div>
-  <div class="stat"><small>Productos registrados</small><strong>${products.length}</strong></div>
-  <div class="stat"><small>Productos publicados</small><strong>${products.filter(x=>x.publicado==='SI').length}</strong></div>
-  <div class="stat"><small>Valor del inventario (precio de venta)</small><strong>${cop(products.reduce((sum,p)=>sum+(Number(p.precio)||0)*(Number(p.stock)||0),0))}</strong></div>
-  </div><p class="note">El valor del inventario es una estimación a precio de venta, no representa ingresos ni ganancias.</p>`;
+  <div class="stat"><small>Valor de pedidos del mes</small><strong>${cop(orders.filter(o=>o.fechaPedido.startsWith(month)&&o.estadoPedido!=='Cancelado').reduce((a,o)=>a+Number(o.valor||0),0))}</strong></div>
+  </div><p class="note">Valor de pedidos registrados este mes; no representa cobros ni ganancias.</p>`;
 }
 
 function adminView() {
   const rows = cache[tab].filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q.toLowerCase()));
-  $('#app').innerHTML = `${overview()}<div class="tabs">${['Clientes','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
-  <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
-  <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'stock' && 0 ? cop(r[c]) : esc(c === 'publicado' ? (r[c] === 'SI' ? 'Sí' : 'No') : clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
+  $('#app').innerHTML = `${overview()}<div class="tabs">${['Clientes','Pedidos','Productos'].map(t => `<button class="${t === tab ? 'on' : ''}" data-t="${t}">${t} (${cache[t].length})</button>`).join('')}</div>
+  <div class="bar"><input id="q" placeholder="Buscar…" value="${esc(q)}" aria-label="Buscar"><button id="new">Nuevo ${tab === 'Clientes' ? 'cliente' : tab === 'Pedidos' ? 'pedido' : 'producto'}</button><button class="sec" id="rl">Actualizar</button></div>
+  <div class="tw">${rows.length ? `<table><thead><tr>${COLS[tab].map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r => `<tr>${COLS[tab].map((c, i) => `<td>${i === 0 && r.foto ? `<img class="thumb" src="${esc(r.foto)}" alt="">` : ''}${c === 'precio' || c === 'valor' ? cop(r[c]) : esc(c==='clienteId'?(cache.Clientes.find(x=>x.id===r[c])?.nombre||r[c]):c==='productoId'?(cache.Productos.find(x=>x.id===r[c])?.nombre||r[c]):c==='publicado'?(r[c]==='SI'?'Sí':'No'):clean(r[c]))}</td>`).join('')}<td class="act"><button class="sec" data-e="${r.id}">Editar</button> <button class="del" data-d="${r.id}">Archivar</button></td></tr>`).join('')}</tbody></table>` : `<div class="empty">No hay ${tab.toLowerCase()} todavía. Crea el primero con el botón de arriba.</div>`}</div>`;
   document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; q = ''; adminView(); });
   $('#q').oninput = e => { q = e.target.value; const p = e.target.selectionStart; adminView(); $('#q').focus(); $('#q').setSelectionRange(p, p); };
-  $('#new').onclick = () => form(); $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
-  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => form(cache[tab].find(r => r.id === b.dataset.e)));
+  $('#new').onclick = () => tab==='Pedidos'?orderForm():form(); $('#rl').onclick = async () => { try { await load(); adminView(); toast('Datos actualizados'); } catch (e) { toast(e.message, true); } };
+  document.querySelectorAll('[data-e]').forEach(b => b.onclick = () => tab==='Pedidos'?orderForm(cache[tab].find(r => r.id === b.dataset.e)):form(cache[tab].find(r => r.id === b.dataset.e)));
   document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => archive(cache[tab].find(r => r.id === b.dataset.d)));
 }
 
@@ -207,6 +207,39 @@ async function archive(r) {
   if (!confirm('¿Archivar "' + clean(r.nombre) + '"? Dejará de verse, pero se conserva en la hoja.')) return;
   try { await api('archive', {entity: tab, id: r.id, actualizadoEn: r.actualizadoEn}); cache[tab] = cache[tab].filter(x => x.id !== r.id); adminView(); toast('Registro archivado'); }
   catch (x) { toast(x.message, true); if (x.code === 'CONFLICT') { await load(); adminView(); } }
+}
+
+
+async function orderForm(rec){
+ const d=$('#dlg',),v=rec||{},files=(()=>{try{return JSON.parse(v.archivos||'[]')}catch{return []}})();
+ const opts=(rows,val)=>rows.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===val?'selected':'')+'>'+esc(x.nombre)+'</option>').join('');
+ d.innerHTML='<form id="of"><h2>'+(rec?'Editar':'Nuevo')+' pedido</h2>'+
+ '<label>Cliente</label><select id="oc" required><option value="">Seleccionar cliente</option>'+opts(cache.Clientes,v.clienteId)+'</select><button type="button" class="sec" id="nc">+ Nuevo cliente</button>'+
+ '<div id="newc" hidden><label>Nombre del cliente</label><input id="cn"><label>WhatsApp</label><input id="ct"><label>Correo</label><input id="ce" type="email"></div>'+
+ '<label>Producto</label><select id="op" required><option value="">Seleccionar producto</option>'+opts(cache.Productos,v.productoId)+'</select>'+
+ '<label>Cantidad</label><input id="oq" type="number" min="1" step="1" value="'+esc(v.cantidad||1)+'" required>'+
+ '<label>Valor del pedido (COP)</label><input id="ov" type="number" min="0" step="any" value="'+esc(v.valor||'')+'" required>'+
+ '<label>Fecha</label><input id="od" type="date" value="'+esc(v.fechaPedido||new Date().toLocaleDateString('en-CA'))+'" required>'+
+ '<label>Estado</label><select id="os">'+['Pendiente','Diseñando','Imprimiendo','Listo','Entregado','Cancelado'].map(x=>'<option '+(x===(v.estadoPedido||'Pendiente')?'selected':'')+'>'+x+'</option>').join('')+'</select>'+
+ '<label>Notas</label><textarea id="on">'+esc(v.notas||'')+'</textarea><label>Enlaces (uno por línea)</label><textarea id="ol">'+esc(v.enlaces||'')+'</textarea>'+
+ '<label>Adjuntar fotos o archivos de impresión (máx. 7 MB cada uno)</label><input id="ofiles" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.stl,.obj,.zip">'+
+ '<div id="filelist">'+files.map(f=>'<div><a class="lnk" href="'+esc(f.url)+'" target="_blank" rel="noopener">'+esc(f.name)+'</a></div>').join('')+'</div>'+
+ '<div class="row"><button type="button" class="sec" id="cancelOrder">Cancelar</button><button type="submit" id="saveOrder">Guardar</button></div></form>';
+ d.showModal();$('#cancelOrder').onclick=()=>d.close();
+ $('#nc').onclick=()=>{$('#newc').hidden=!$('#newc').hidden;$('#oc').required=$('#newc').hidden;};
+ let custom=!!rec;
+ const calc=()=>{if(custom)return;const p=cache.Productos.find(x=>x.id===$('#op').value);if(p)$('#ov').value=Number(p.precio||0)*Number($('#oq').value||1);};
+ $('#op').onchange=calc;$('#oq').oninput=calc;$('#ov').oninput=()=>custom=true;
+ $('#of').onsubmit=async e=>{e.preventDefault();const btn=$('#saveOrder');btn.disabled=true;
+ try{
+ let clienteId=$('#oc').value;
+ if(!$('#newc').hidden){const nombre=$('#cn').value.trim();if(!nombre)throw Error('Ingresa el nombre del cliente');const c=await api('create',{entity:'Clientes',values:{nombre,telefono:$('#ct').value,correo:$('#ce').value}});cache.Clientes.push(c);clienteId=c.id;}
+ if(!clienteId||!$('#op').value)throw Error('Selecciona cliente y producto');
+ for(const f of $('#ofiles').files){if(f.size>7*1024*1024)throw Error('Archivo mayor a 7 MB: '+f.name);const dataUrl=await new Promise((resolve,reject)=>{const rd=new FileReader();rd.onload=()=>resolve(rd.result);rd.onerror=reject;rd.readAsDataURL(f)});files.push(await api('uploadOrderFile',{name:f.name,dataUrl}));}
+ const values={clienteId,productoId:$('#op').value,cantidad:$('#oq').value,valor:$('#ov').value,fechaPedido:$('#od').value,estadoPedido:$('#os').value,notas:$('#on').value,enlaces:$('#ol').value,archivos:JSON.stringify(files)};
+ const saved=await api(rec?'update':'create',{entity:'Pedidos',id:rec?.id,actualizadoEn:rec?.actualizadoEn,values});
+ cache.Pedidos=rec?cache.Pedidos.map(x=>x.id===saved.id?saved:x):[...cache.Pedidos,saved];d.close();adminView();toast('Pedido guardado');
+ }catch(err){toast(err.message,true)}finally{btn.disabled=false}};
 }
 
 function resize(file) { // reduce a ~1200px JPEG antes de enviar
